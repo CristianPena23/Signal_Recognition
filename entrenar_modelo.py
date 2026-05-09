@@ -1,4 +1,5 @@
 import os
+import argparse
 import joblib
 import numpy as np
 import pandas as pd
@@ -114,31 +115,60 @@ def evaluar_modelo(nombre_modelo, modelo, x_test, y_test, label_encoder, carpeta
     return acc, reporte, matriz
 
 
-def guardar_modelo_y_objetos(modelo, scaler, label_encoder, carpeta_modelos, nombre_base):
+def guardar_modelo_y_objetos(modelo, scaler, label_encoder, carpeta_modelos, nombre_base, sufijo=""):
     os.makedirs(carpeta_modelos, exist_ok=True)
 
     ruta_modelo = os.path.join(carpeta_modelos, f"{nombre_base}.pkl")
-    ruta_scaler = os.path.join(carpeta_modelos, "scaler.pkl")
-    ruta_label_encoder = os.path.join(carpeta_modelos, "label_encoder.pkl")
+    ruta_scaler = os.path.join(carpeta_modelos, f"scaler{sufijo}.pkl")
+    ruta_label_encoder = os.path.join(carpeta_modelos, f"label_encoder{sufijo}.pkl")
 
     joblib.dump(modelo, ruta_modelo)
-    joblib.dump(scaler, ruta_scaler)
+    if scaler is not None:
+        joblib.dump(scaler, ruta_scaler)
+        print("Scaler guardado en:", ruta_scaler)
     joblib.dump(label_encoder, ruta_label_encoder)
 
-    print("\nModelo guardado en:", ruta_modelo)
-    print("Scaler guardado en:", ruta_scaler)
+    print("Modelo guardado en:", ruta_modelo)
     print("LabelEncoder guardado en:", ruta_label_encoder)
 
 
 if __name__ == "__main__":
-    ruta_features = "DataSet/processed/features.csv"
-    carpeta_resultados = "results/modelos"
+    parser = argparse.ArgumentParser(description="Entrena modelos de clasificación de señas.")
+    grupo = parser.add_mutually_exclusive_group()
+    grupo.add_argument(
+        "--vocales",
+        action="store_true",
+        help="Usa features_vocales.csv y guarda modelos con sufijo _vocales.",
+    )
+    grupo.add_argument(
+        "--seleccionadas",
+        action="store_true",
+        help="Usa features_vocales_seleccionadas.csv y guarda modelos con sufijo _seleccionadas.",
+    )
+    args = parser.parse_args()
+
+    if args.seleccionadas:
+        ruta_features      = "DataSet/processed/features_vocales_seleccionadas.csv"
+        carpeta_resultados = "results/modelos_seleccionadas"
+        sufijo_modelos     = "_seleccionadas"
+    elif args.vocales:
+        ruta_features      = "DataSet/processed/features_vocales.csv"
+        carpeta_resultados = "results/modelos_vocales"
+        sufijo_modelos     = "_vocales"
+    else:
+        ruta_features      = "DataSet/processed/features.csv"
+        carpeta_resultados = "results/modelos"
+        sufijo_modelos     = ""
+
     carpeta_modelos = "models"
 
     os.makedirs(carpeta_resultados, exist_ok=True)
     os.makedirs(carpeta_modelos, exist_ok=True)
 
+    print(f"Usando: {ruta_features}")
     df, x, y, columnas_features = cargar_datos(ruta_features)
+    print(f"Clases: {sorted(set(y))}  |  Muestras: {len(y)}")
+
     y_codificado, label_encoder = preparar_etiquetas(y)
 
     x_train, x_test, y_train, y_test = partir_datos(x, y_codificado)
@@ -152,54 +182,37 @@ if __name__ == "__main__":
     acc_knn, rep_knn, mat_knn = evaluar_modelo(
         "KNN", modelo_knn, x_test_escalado, y_test, label_encoder, carpeta_resultados
     )
-    resultados["KNN"] = {
-        "modelo": modelo_knn,
-        "accuracy": acc_knn
-    }
+    resultados["KNN"] = {"modelo": modelo_knn, "accuracy": acc_knn, "escalado": True}
 
     # SVM
     modelo_svm = entrenar_svm(x_train_escalado, y_train)
     acc_svm, rep_svm, mat_svm = evaluar_modelo(
         "SVM", modelo_svm, x_test_escalado, y_test, label_encoder, carpeta_resultados
     )
-    resultados["SVM"] = {
-        "modelo": modelo_svm,
-        "accuracy": acc_svm
-    }
+    resultados["SVM"] = {"modelo": modelo_svm, "accuracy": acc_svm, "escalado": True}
 
     # Random Forest
     modelo_rf = entrenar_random_forest(x_train, y_train)
     acc_rf, rep_rf, mat_rf = evaluar_modelo(
         "RandomForest", modelo_rf, x_test, y_test, label_encoder, carpeta_resultados
     )
-    resultados["RandomForest"] = {
-        "modelo": modelo_rf,
-        "accuracy": acc_rf
-    }
+    resultados["RandomForest"] = {"modelo": modelo_rf, "accuracy": acc_rf, "escalado": False}
 
     print("\nResumen de accuracies:")
     for nombre, info in resultados.items():
-        print(f"{nombre}: {info['accuracy']:.4f}")
+        print(f"  {nombre}: {info['accuracy']:.4f}")
 
     mejor_nombre = max(resultados, key=lambda k: resultados[k]["accuracy"])
     mejor_modelo = resultados[mejor_nombre]["modelo"]
+    usa_scaler   = resultados[mejor_nombre]["escalado"]
 
     print(f"\nEl mejor modelo fue: {mejor_nombre}")
 
-    # guardado según el mejor modelo
-    if mejor_nombre in ["KNN", "SVM"]:
-        guardar_modelo_y_objetos(
-            mejor_modelo,
-            scaler,
-            label_encoder,
-            carpeta_modelos,
-            f"modelo_{mejor_nombre.lower()}"
-        )
-    else:
-        guardar_modelo_y_objetos(
-            mejor_modelo,
-            None,
-            label_encoder,
-            carpeta_modelos,
-            f"modelo_{mejor_nombre.lower()}"
-        )
+    guardar_modelo_y_objetos(
+        mejor_modelo,
+        scaler if usa_scaler else None,
+        label_encoder,
+        carpeta_modelos,
+        nombre_base=f"modelo_{mejor_nombre.lower()}{sufijo_modelos}",
+        sufijo=sufijo_modelos,
+    )
