@@ -47,6 +47,32 @@ def _cargar_indices_seleccionados(ruta_csv):
     indices = np.array([nombre_a_idx[f] for f in feats_sel], dtype=int)
     return indices, feats_sel
 
+
+def _cargar_modelo_compatible(models_dir, n_feats):
+    """Busca en models_dir cualquier .pkl con n_features_in_ == n_feats.
+    Devuelve (clf, le) o (None, None) si no hay coincidencia."""
+    import glob
+
+    encoders = sorted(glob.glob(os.path.join(models_dir, "label_encoder_*.pkl")))
+    if not encoders:
+        print(f"  No se encontro label_encoder_*.pkl en {models_dir}")
+        return None, None
+    le = joblib.load(encoders[0])
+
+    for ruta in sorted(glob.glob(os.path.join(models_dir, "*.pkl"))):
+        nombre = os.path.basename(ruta)
+        if nombre.startswith("label_encoder_") or nombre.startswith("scaler_"):
+            continue
+        try:
+            clf = joblib.load(ruta)
+        except Exception:
+            continue
+        if hasattr(clf, "n_features_in_") and clf.n_features_in_ == n_feats:
+            print(f"  Modelo cargado : {nombre}  ({n_feats} features)")
+            return clf, le
+
+    return None, None
+
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),
     (0, 5), (5, 6), (6, 7), (7, 8),
@@ -152,14 +178,97 @@ def _extraer_features(puntos_norm):
 
 # -------------------------------------------------------------------------------
 
+def _probar_camara(idx, resultado, timeout=1.0):
+    """Worker de hilo: abre idx y escribe (w, h) en resultado[0] si hay imagen."""
+    import threading
+
+    def _worker():
+        cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                resultado[0] = (
+                    int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                )
+        cap.release()
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
+
+
+def detectar_camaras(indices=(0, 1, 2)):
+    """Prueba cada índice con timeout de 1 s y devuelve lista de (indice, w, h)."""
+    disponibles = []
+    print("\nDetectando camaras disponibles...")
+    for idx in indices:
+        resultado = [None]
+        _probar_camara(idx, resultado)
+        if resultado[0] is not None:
+            w, h = resultado[0]
+            disponibles.append((idx, w, h))
+            print(f"  [{idx}] OK  -  {w}x{h}")
+        else:
+            print(f"  [{idx}] no disponible")
+    return disponibles
+
+
+def seleccionar_camara():
+    """Detecta camaras y devuelve el índice elegido (auto si solo hay una)."""
+    disponibles = detectar_camaras()
+
+    if not disponibles:
+        print("No se encontro ninguna camara disponible.")
+        return None
+
+    if len(disponibles) == 1:
+        idx = disponibles[0][0]
+        print(f"\nCamara unica detectada: usando indice {idx} automaticamente.")
+        return idx
+
+    indices_validos = {str(idx) for idx, _, _ in disponibles}
+
+    print("\nSelecciona el indice de camara a usar: ", end="", flush=True)
+    eleccion = input().strip()
+
+    while eleccion not in indices_validos:
+        print(f"  Indice no valido. Opciones: {sorted(indices_validos)}")
+        print("Selecciona el indice de camara a usar: ", end="", flush=True)
+        eleccion = input().strip()
+
+    return int(eleccion)
+
+
 def iniciar_deteccion_tiempo_real():
     descargar_modelo_si_falta()
 
-    clf = joblib.load(os.path.join(MODELS_DIR, "modelo_randomforest_seleccionadas.pkl"))
-    le  = joblib.load(os.path.join(MODELS_DIR, "label_encoder_seleccionadas.pkl"))
-
     indices_sel, feats_sel = _cargar_indices_seleccionados(RUTA_FEATURES_SELECCIONADAS)
-    print(f"Features seleccionadas: {len(feats_sel)}")
+    n_feats = len(feats_sel)
+    print(f"Features seleccionadas: {n_feats}")
+
+    clf, le = _cargar_modelo_compatible(MODELS_DIR, n_feats)
+    if clf is None:
+        modelos = [f for f in os.listdir(MODELS_DIR) if f.startswith("modelo_") and f.endswith(".pkl")]
+        esperados = []
+        for m in modelos:
+            try:
+                tmp = joblib.load(os.path.join(MODELS_DIR, m))
+                if hasattr(tmp, "n_features_in_"):
+                    esperados.append(f"{m} ({tmp.n_features_in_} features)")
+            except Exception:
+                pass
+        print(f"\nERROR: No se encontro modelo compatible con {n_feats} features.")
+        if esperados:
+            print(f"  Modelos en {MODELS_DIR}:")
+            for e in esperados:
+                print(f"    - {e}")
+        print("  Ejecuta setup_pipeline.py para reentrenar con las features actuales.")
+        return
+
+    idx_camara = seleccionar_camara()
+    if idx_camara is None:
+        return
 
     base_options = mp_python.BaseOptions(model_asset_path=MODEL_PATH)
     options = vision.HandLandmarkerOptions(
@@ -171,9 +280,9 @@ def iniciar_deteccion_tiempo_real():
         min_tracking_confidence=0.5,
     )
 
-    cap = cv2.VideoCapture(1)  # índice 1 = iVCam (iPhone)
+    cap = cv2.VideoCapture(idx_camara, cv2.CAP_DSHOW)
     if not cap.isOpened():
-        print("No se pudo abrir la webcam")
+        print(f"No se pudo abrir la camara {idx_camara}")
         return
 
     historial = deque(maxlen=15)

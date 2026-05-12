@@ -2,52 +2,75 @@ import cv2
 import mediapipe as mp
 import pandas as pd
 import numpy as np
+import urllib.request
+import os
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision
 
-mp_hands = mp.solutions.hands
+MODEL_PATH = "hand_landmarker.task"
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/"
+    "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+)
 
-def procesar_imagen(ruta_img, hands_model):
+
+def _descargar_modelo():
+    if not os.path.exists(MODEL_PATH):
+        print("Descargando modelo hand_landmarker.task...")
+        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+        print("Modelo descargado.")
+
+
+def procesar_imagen(ruta_img, landmarker):
     img = cv2.imread(ruta_img)
 
     if img is None:
         return None
 
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
 
-    resultado = hands_model.process(img_rgb)
+    resultado = landmarker.detect(mp_image)
 
-    if not resultado.multi_hand_landmarks:
+    if not resultado.hand_landmarks:
         return None
 
-    mano = resultado.multi_hand_landmarks[0]
+    mano = resultado.hand_landmarks[0]
 
-    puntos = []
+    puntos = [[lm.x, lm.y, lm.z] for lm in mano]
 
-    for lm in mano.landmark:
-        puntos.append([lm.x, lm.y, lm.z])
-
-    return np.array(puntos)  # (21,3)
+    return np.array(puntos)  # (21, 3)
 
 
 def extraer_landmarks(df_metadata):
+    _descargar_modelo()
+
     data = []
 
-    with mp_hands.Hands(static_image_mode=True) as hands:
+    base_options = mp_python.BaseOptions(model_asset_path=MODEL_PATH)
+    options = vision.HandLandmarkerOptions(
+        base_options=base_options,
+        running_mode=vision.RunningMode.IMAGE,
+        num_hands=1,
+        min_hand_detection_confidence=0.5,
+    )
 
-        for i, row in df_metadata.iterrows():
+    with vision.HandLandmarker.create_from_options(options) as landmarker:
+
+        for _, row in df_metadata.iterrows():
             ruta = row["ruta"]
 
-            puntos = procesar_imagen(ruta, hands)
+            puntos = procesar_imagen(ruta, landmarker)
 
             if puntos is None:
                 continue
 
             fila = {}
 
-            # guardar puntos como features
-            for i in range(21):
-                fila[f"x_{i}"] = puntos[i][0]
-                fila[f"y_{i}"] = puntos[i][1]
-                fila[f"z_{i}"] = puntos[i][2]
+            for j in range(21):
+                fila[f"x_{j}"] = puntos[j][0]
+                fila[f"y_{j}"] = puntos[j][1]
+                fila[f"z_{j}"] = puntos[j][2]
 
             fila["clase"] = row["clase"]
             fila["persona"] = row["persona"]

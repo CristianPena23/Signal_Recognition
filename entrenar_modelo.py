@@ -175,44 +175,60 @@ if __name__ == "__main__":
 
     x_train_escalado, x_test_escalado, scaler = escalar_datos(x_train, x_test)
 
-    resultados = {}
+    if args.seleccionadas:
+        # Solo Random Forest; no necesita escalado
+        print("\nEntrenando Random Forest (modo --seleccionadas)...")
+        modelo_rf = entrenar_random_forest(x_train, y_train)
+        evaluar_modelo(
+            "RandomForest", modelo_rf, x_test, y_test, label_encoder, carpeta_resultados
+        )
+        guardar_modelo_y_objetos(
+            modelo_rf,
+            None,
+            label_encoder,
+            carpeta_modelos,
+            nombre_base="modelo_randomforest_seleccionadas",
+            sufijo="_seleccionadas",
+        )
+    else:
+        resultados = {}
 
-    # KNN
-    modelo_knn = entrenar_knn(x_train_escalado, y_train)
-    acc_knn, rep_knn, mat_knn = evaluar_modelo(
-        "KNN", modelo_knn, x_test_escalado, y_test, label_encoder, carpeta_resultados
-    )
-    resultados["KNN"] = {"modelo": modelo_knn, "accuracy": acc_knn, "escalado": True}
+        # KNN
+        modelo_knn = entrenar_knn(x_train_escalado, y_train)
+        acc_knn, _, _ = evaluar_modelo(
+            "KNN", modelo_knn, x_test_escalado, y_test, label_encoder, carpeta_resultados
+        )
+        resultados["KNN"] = {"modelo": modelo_knn, "accuracy": acc_knn, "escalado": True}
 
-    # SVM
-    modelo_svm = entrenar_svm(x_train_escalado, y_train)
-    acc_svm, rep_svm, mat_svm = evaluar_modelo(
-        "SVM", modelo_svm, x_test_escalado, y_test, label_encoder, carpeta_resultados
-    )
-    resultados["SVM"] = {"modelo": modelo_svm, "accuracy": acc_svm, "escalado": True}
+        # SVM
+        modelo_svm = entrenar_svm(x_train_escalado, y_train)
+        acc_svm, _, _ = evaluar_modelo(
+            "SVM", modelo_svm, x_test_escalado, y_test, label_encoder, carpeta_resultados
+        )
+        resultados["SVM"] = {"modelo": modelo_svm, "accuracy": acc_svm, "escalado": True}
 
-    # Random Forest
-    modelo_rf = entrenar_random_forest(x_train, y_train)
-    acc_rf, rep_rf, mat_rf = evaluar_modelo(
-        "RandomForest", modelo_rf, x_test, y_test, label_encoder, carpeta_resultados
-    )
-    resultados["RandomForest"] = {"modelo": modelo_rf, "accuracy": acc_rf, "escalado": False}
+        # Random Forest
+        modelo_rf = entrenar_random_forest(x_train, y_train)
+        acc_rf, _, _ = evaluar_modelo(
+            "RandomForest", modelo_rf, x_test, y_test, label_encoder, carpeta_resultados
+        )
+        resultados["RandomForest"] = {"modelo": modelo_rf, "accuracy": acc_rf, "escalado": False}
 
-    print("\nResumen de accuracies:")
-    for nombre, info in resultados.items():
-        print(f"  {nombre}: {info['accuracy']:.4f}")
+        print("\nResumen de accuracies:")
+        for nombre, info in resultados.items():
+            print(f"  {nombre}: {info['accuracy']:.4f}")
 
-    mejor_nombre = max(resultados, key=lambda k: resultados[k]["accuracy"])
-    mejor_modelo = resultados[mejor_nombre]["modelo"]
-    usa_scaler   = resultados[mejor_nombre]["escalado"]
+        mejor_nombre = max(resultados, key=lambda k: resultados[k]["accuracy"])
+        mejor_modelo = resultados[mejor_nombre]["modelo"]
+        usa_scaler   = resultados[mejor_nombre]["escalado"]
 
-    print(f"\nEl mejor modelo fue: {mejor_nombre}")
+        print(f"\nEl mejor modelo fue: {mejor_nombre}")
 
-    guardar_modelo_y_objetos(
-        mejor_modelo,
-        scaler if usa_scaler else None,
-        label_encoder,
-        carpeta_modelos,
-        nombre_base=f"modelo_{mejor_nombre.lower()}{sufijo_modelos}",
-        sufijo=sufijo_modelos,
-    )
+        guardar_modelo_y_objetos(
+            mejor_modelo,
+            scaler if usa_scaler else None,
+            label_encoder,
+            carpeta_modelos,
+            nombre_base=f"modelo_{mejor_nombre.lower()}{sufijo_modelos}",
+            sufijo=sufijo_modelos,
+        )

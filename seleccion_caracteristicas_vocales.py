@@ -6,7 +6,7 @@ Etapas:
   2. ANOVA + FDR B-H + Bonferroni  — features estadísticamente significativas
   3. PCA                           — varianza explicada + scatter 2D
   4. SelectKBest (F-score y MI)    — ranking automático top-K
-  5. Sistema de votos              — features en ≥ 2 métodos → conjunto final
+  5. Sistema de votos              — features en >= 2 métodos → conjunto final
   6. Box plots y violin plots      — conjunto final por vocal
   7. Guardado de gráficas y CSV
 """
@@ -200,7 +200,7 @@ var_ind  = pca_full.explained_variance_ratio_
 var_acum = np.cumsum(var_ind)
 n_95     = int(np.searchsorted(var_acum, 0.95)) + 1
 
-print(f"  Componentes para ≥95% varianza : {n_95}")
+print(f"  Componentes para >=95% varianza : {n_95}")
 print(f"  Varianza PC1={var_ind[0]*100:.2f}%  PC2={var_ind[1]*100:.2f}%")
 
 # Gráficas de varianza explicada
@@ -265,7 +265,7 @@ set_mi     = {retenidas_corr[i] for i in idx_top_mi}
 
 print(f"  Features SelectKBest F-score : {len(set_fscore)}")
 print(f"  Features SelectKBest MI      : {len(set_mi)}")
-print(f"  Intersección F ∩ MI          : {len(set_fscore & set_mi)}")
+print(f"  Interseccion F & MI          : {len(set_fscore & set_mi)}")
 
 # Scatter F-score vs MI con colores por pertenencia
 f_norm  = f_scores_arr  / (f_scores_arr.max()  + 1e-12)
@@ -301,7 +301,7 @@ guardar(fig, "4_fscore_vs_mi.png")
 
 # ── 5. Sistema de votos ───────────────────────────────────────────────────────
 
-banner("5. Sistema de votos  (umbral ≥ 2 de 4 métodos)")
+banner("5. Sistema de votos  (umbral >= 2 de 4 métodos)")
 
 metodos = {
     "ANOVA B-H"        : set_bh,
@@ -322,14 +322,14 @@ print(f"\n  Votos por método:")
 for nombre, s in metodos.items():
     print(f"    {nombre:<22} : {len(s):>4} features")
 print(f"\n  Features candidatas       : {len(candidatas)}")
-print(f"  Features con ≥ 2 votos    : {len(conjunto_final)}")
+print(f"  Features con >= 2 votos    : {len(conjunto_final)}")
 
 # Histograma de votos
 conteo_v = pd.Series(votos_dict.values()).value_counts().sort_index()
 fig, ax = plt.subplots(figsize=(7, 4))
 colores_v = ["#bdc3c7" if v < 2 else "#9b59b6" for v in conteo_v.index]
 ax.bar(conteo_v.index.astype(str), conteo_v.values, color=colores_v, edgecolor="white")
-ax.axvline(1.5, color="red", ls="--", lw=1.5, label="Umbral ≥ 2")
+ax.axvline(1.5, color="red", ls="--", lw=1.5, label="Umbral >= 2")
 ax.set_xlabel("Número de votos recibidos")
 ax.set_ylabel("Número de features")
 ax.set_title("Distribución de votos por feature")
@@ -450,4 +450,4 @@ print(f"  Tras ANOVA B-H                  : {len(set_bh)}")
 print(f"  Tras ANOVA Bonferroni           : {len(set_bonf)}")
 print(f"  SelectKBest F-score (top-{K_actual:<3})  : {len(set_fscore)}")
 print(f"  SelectKBest MI      (top-{K_actual:<3})  : {len(set_mi)}")
-print(f"  Conjunto final (≥ 2 votos)      : {len(conjunto_final)}")
+print(f"  Conjunto final (>= 2 votos)      : {len(conjunto_final)}")
