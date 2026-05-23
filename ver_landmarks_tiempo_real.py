@@ -178,13 +178,14 @@ def _extraer_features(puntos_norm):
 
 # -------------------------------------------------------------------------------
 
-def _probar_camara(idx, resultado, timeout=1.0):
+def _probar_camara(idx, resultado, timeout=5.0):
     """Worker de hilo: abre idx y escribe (w, h) en resultado[0] si hay imagen."""
     import threading
 
     def _worker():
         cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
         if cap.isOpened():
+            time.sleep(3)
             ret, frame = cap.read()
             if ret and frame is not None:
                 resultado[0] = (
@@ -283,6 +284,15 @@ def iniciar_deteccion_tiempo_real():
     cap = cv2.VideoCapture(idx_camara, cv2.CAP_DSHOW)
     if not cap.isOpened():
         print(f"No se pudo abrir la camara {idx_camara}")
+        return
+    time.sleep(2)
+    for _ in range(30):
+        ret, _ = cap.read()
+        if ret:
+            break
+    else:
+        print("La camara no pudo entregar frames tras 30 intentos")
+        cap.release()
         return
 
     historial = deque(maxlen=15)
