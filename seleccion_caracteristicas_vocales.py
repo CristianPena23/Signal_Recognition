@@ -441,6 +441,17 @@ df_final.to_csv(RUTA_SALIDA_CSV, index=False)
 print(f"  CSV guardado en  : {RUTA_SALIDA_CSV}")
 print(f"  Shape final      : {df_final.shape}  "
       f"({len(conjunto_final)} features × {len(df_final)} muestras)")
+
+# Top-100 features ordenadas por F-score descendente
+RUTA_TOP100  = "DataSet/processed/features_vocales_top100.csv"
+n_top100     = min(100, len(conjunto_ordenado))
+top100_feats = conjunto_ordenado[:n_top100]
+df_top100    = df[top100_feats + cols_extra].copy()
+df_top100.to_csv(RUTA_TOP100, index=False)
+print(f"  CSV top-{n_top100} guardado en  : {RUTA_TOP100}")
+print(f"  Shape top-{n_top100}            : {df_top100.shape}  "
+      f"({n_top100} features × {len(df_top100)} muestras)")
+
 print(f"  Gráficas en      : {DIR_RESULTADOS}/")
 
 banner("Pipeline completado")
@@ -451,3 +462,4 @@ print(f"  Tras ANOVA Bonferroni           : {len(set_bonf)}")
 print(f"  SelectKBest F-score (top-{K_actual:<3})  : {len(set_fscore)}")
 print(f"  SelectKBest MI      (top-{K_actual:<3})  : {len(set_mi)}")
 print(f"  Conjunto final (>= 2 votos)      : {len(conjunto_final)}")
+print(f"  Top-100 por F-score              : {min(100, len(conjunto_ordenado))}")

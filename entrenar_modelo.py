@@ -145,9 +145,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Usa features_vocales_seleccionadas.csv y guarda modelos con sufijo _seleccionadas.",
     )
+    grupo.add_argument(
+        "--top100",
+        action="store_true",
+        help="Usa features_vocales_top100.csv y entrena solo Random Forest con métricas completas.",
+    )
     args = parser.parse_args()
 
-    if args.seleccionadas:
+    if args.top100:
+        ruta_features      = "DataSet/processed/features_vocales_top100.csv"
+        carpeta_resultados = "results/modelos_top100"
+        sufijo_modelos     = "_top100"
+    elif args.seleccionadas:
         ruta_features      = "DataSet/processed/features_vocales_seleccionadas.csv"
         carpeta_resultados = "results/modelos_seleccionadas"
         sufijo_modelos     = "_seleccionadas"
@@ -175,7 +184,29 @@ if __name__ == "__main__":
 
     x_train_escalado, x_test_escalado, scaler = escalar_datos(x_train, x_test)
 
-    if args.seleccionadas:
+    if args.top100:
+        print("\nEntrenando Random Forest (modo --top100)...")
+        modelo_rf = entrenar_random_forest(x_train, y_train)
+        acc_rf, reporte_rf, matriz_rf = evaluar_modelo(
+            "RandomForest_top100", modelo_rf, x_test, y_test, label_encoder, carpeta_resultados
+        )
+        ruta_metricas = os.path.join(carpeta_resultados, "metricas_randomforest_top100.txt")
+        with open(ruta_metricas, "w", encoding="utf-8") as fh:
+            fh.write(f"Accuracy global: {acc_rf:.4f}\n\n")
+            fh.write("Reporte de clasificación (precisión, recall, F1 por vocal y global):\n")
+            fh.write(reporte_rf)
+            fh.write("\nMatriz de confusión:\n")
+            fh.write(str(matriz_rf))
+        print(f"Métricas guardadas en: {ruta_metricas}")
+        guardar_modelo_y_objetos(
+            modelo_rf,
+            None,
+            label_encoder,
+            carpeta_modelos,
+            nombre_base="modelo_randomforest_top100",
+            sufijo="_top100",
+        )
+    elif args.seleccionadas:
         # Solo Random Forest; no necesita escalado
         print("\nEntrenando Random Forest (modo --seleccionadas)...")
         modelo_rf = entrenar_random_forest(x_train, y_train)
